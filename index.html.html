@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucena City Jail | PDL Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { --pdl-purple:#7b1fa2; --header-tan:#a1887f; --bg-light:#f0f2f5; }
+        body { background-color:var(--bg-light); font-family:'Segoe UI',sans-serif; padding-top:20px; }
+
+        .dashboard-card { background:white; border-top:5px solid var(--pdl-purple); border-radius:15px; padding:20px; margin-bottom:30px; box-shadow:0 4px 12px rgba(0,0,0,.1); }
+        .dash-timer { font-family:monospace; font-weight:bold; font-size:1.05rem; }
+        .warning-time { color:#fd7e14; }
+        .danger-time  { color:#dc3545; animation:blinker 1s linear infinite; }
+
+        .search-container { display:flex; gap:10px; margin-bottom:30px; }
+        .search-box { background:#fff; border:2px solid var(--pdl-purple); border-radius:10px; padding:10px 20px; font-size:1.1rem; flex-grow:1; }
+        .btn-main-add { background-color:var(--pdl-purple); color:white; border:none; padding:0 25px; border-radius:10px; font-weight:bold; transition:.3s; }
+        .btn-main-add:hover { background-color:#651b87; color:white; }
+        .bg-purple { background-color:var(--pdl-purple) !important; }
+
+        .pdl-profile-container { border:3px solid var(--pdl-purple); border-radius:15px; padding:20px; background:white; margin-bottom:25px; box-shadow:0 4px 6px rgba(0,0,0,.05); }
+        .pdl-photo { width:140px; height:140px; border-radius:12px; object-fit:cover; border:1px solid #ddd; cursor:pointer; }
+        .pdl-name  { font-size:1.5rem; font-weight:800; color:#212121; text-transform:uppercase; }
+        .pdl-meta  { font-size:.95rem; line-height:1.6; }
+
+        .visitor-table { width:100%; font-size:.85rem; text-align:center; }
+        .visitor-table th { background-color:var(--header-tan); color:white; padding:10px; border:1px solid #bca8a1; white-space:nowrap; }
+        .visitor-table td { padding:10px; border:1px solid #eee; vertical-align:middle; }
+
+        .time-limit-wrap { display:flex; align-items:center; gap:2px; justify-content:center; }
+        .time-seg-input  { width:40px; text-align:center; border-radius:4px; border:1px solid #ccc; padding:2px 0; font-size:.83rem; }
+        .time-seg-sep    { font-weight:bold; color:#555; }
+
+        .status-toggle { cursor:pointer; width:22px; height:22px; border-radius:50%; display:inline-block; border:2px solid #fff; box-shadow:0 0 2px #000; }
+        .status-toggle.in  { background-color:#28a745; }
+        .status-toggle.out { background-color:#dc3545; }
+
+        .visitor-section { display:none; margin-top:15px; border-top:2px dashed #eee; padding-top:15px; }
+
+        .audit-table thead th { background-color:var(--pdl-purple); color:white; white-space:nowrap; }
+
+        #buzzerBanner { display:none; position:fixed; bottom:0; left:0; right:0; background:#dc3545; color:white; padding:14px 20px; font-size:1.1rem; font-weight:bold; z-index:9999; text-align:center; animation:blinker .6s linear infinite; }
+        #buzzerBanner button { margin-left:20px; font-size:.95rem; }
+
+        @keyframes blinker { 50% { opacity:0; } }
+    </style>
+</head>
+<body>
+
+<!-- Persistent Buzzer Banner -->
+<div id="buzzerBanner">
+    <i class="bi bi-alarm-fill"></i>
+    &nbsp;<span id="buzzerNames"></span> — TIME EXPIRED!
+    &nbsp;<button class="btn btn-light btn-sm fw-bold" onclick="stopBuzzer()">
+        <i class="bi bi-stop-circle"></i> STOP BUZZER
+    </button>
+</div>
+
+<div class="container pb-5">
+    <div class="row mb-4 text-center">
+        <h2 class="fw-bold">LUCENA CITY JAIL MANAGEMENT</h2>
+    </div>
+
+    <!-- ░░ AUDIT TRAIL — TOPMOST ░░ -->
+    <div class="dashboard-card">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h5 class="fw-bold mb-0"><i class="bi bi-clock-history text-primary"></i> AUDIT TRAIL</h5>
+            <button class="btn btn-success btn-sm fw-bold" onclick="exportAuditToExcel()">
+                <i class="bi bi-file-earmark-excel-fill"></i> Export to Excel
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 audit-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Activity</th>
+                        <th>Responsible Officer</th>
+                        <th>Visitor</th>
+                        <th>PDL Being Visited</th>
+                        <th>Dorm</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogBody">
+                    <tr><td colspan="6" class="text-center text-muted">Loading logs...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ░░ ACTIVE VISITORS ░░ -->
+    <div class="dashboard-card">
+        <h5 class="fw-bold mb-3"><i class="bi bi-people-fill text-primary"></i> ACTIVE VISITORS (IN)</h5>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Visitor Name</th><th>Relation</th><th>Visiting PDL</th>
+                        <th>Dorm</th><th>Time Remaining</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="activeDashboardBody">
+                    <tr><td colspan="6" class="text-center text-muted">No visitors currently inside.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ░░ SEARCH + ADD PDL ░░ -->
+    <div class="search-container">
+        <input type="text" id="pdlSearch" class="form-control search-box" placeholder="🔍 Search PDL Name...">
+        <button class="btn btn-success fw-bold" style="border-radius:10px;white-space:nowrap;" onclick="exportPdlToExcel()">
+            <i class="bi bi-file-earmark-excel-fill"></i> Export PDL Records
+        </button>
+        <button class="btn btn-main-add" data-bs-toggle="modal" data-bs-target="#addPdlModal">
+            <i class="bi bi-person-plus-fill"></i> ADD PDL
+        </button>
+    </div>
+
+    <div id="pdlContainer"></div>
+</div>
+
+<!-- ░░ TIME UP MODAL ░░ -->
+<div class="modal fade" id="timeUpModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-alarm-fill"></i> TIME EXPIRED!</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <h2 id="alertVisitorName" class="fw-bold text-danger"></h2>
+                <p id="alertPdlContext"></p>
+                <button class="btn btn-danger mt-2"
+                    onclick="stopBuzzer(); bootstrap.Modal.getInstance(document.getElementById('timeUpModal')).hide()">
+                    <i class="bi bi-stop-circle"></i> Stop Buzzer &amp; Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ░░ ADD PDL MODAL ░░ -->
+<div class="modal fade" id="addPdlModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white"><h5>New PDL</h5></div>
+            <div class="modal-body">
+                <input type="text"  id="newPdlName"       class="form-control mb-2" placeholder="Name">
+                <input type="text"  id="newPdlDorm"       class="form-control mb-2" placeholder="Dorm">
+                <input type="date"  id="newPdlBday"       class="form-control mb-2">
+                <input type="text"  id="newPdlAddr"       class="form-control mb-2" placeholder="Address">
+                <select            id="newPdlCaseStatus" class="form-select mb-2">
+                    <option value="Serving Sentence">Serving Sentence</option>
+                    <option value="Under Trial">Under Trial</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button id="savePdlBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ░░ ADD VISITOR MODAL ░░ -->
+<div class="modal fade" id="addVisitorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-purple text-white"><h5>New Visitor</h5></div>
+            <div class="modal-body">
+                <input type="hidden" id="pdlIdForVisitor">
+                <input type="text"   id="visitorName"    class="form-control mb-2" placeholder="Visitor Name">
+                <input type="text"   id="visitorRel"     class="form-control mb-2" placeholder="Relation">
+                <input type="text"   id="visitorReq"     class="form-control mb-2" placeholder="Requirement / ID">
+                <select             id="visitorRemarks"  class="form-select mb-2">
+                    <option value="Visitation">Visitation</option>
+                    <option value="Paabot">Paabot</option>
+                    <option value="Conjugal">Conjugal</option>
+                    <option value="Ban">Ban</option>
+                </select>
+                <label class="form-label fw-bold mb-1">Time Limit (HH : MM : SS)</label>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="text-center">
+                        <input type="number" id="limitHH" class="form-control text-center" value="0" min="0" max="23" style="width:70px">
+                        <small class="text-muted">Hours</small>
+                    </div>
+                    <span class="fw-bold fs-4 pb-3">:</span>
+                    <div class="text-center">
+                        <input type="number" id="limitMM" class="form-control text-center" value="30" min="0" max="59" style="width:70px">
+                        <small class="text-muted">Mins</small>
+                    </div>
+                    <span class="fw-bold fs-4 pb-3">:</span>
+                    <div class="text-center">
+                        <input type="number" id="limitSS" class="form-control text-center" value="0" min="0" max="59" style="width:70px">
+                        <small class="text-muted">Secs</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveVisitorBtn" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="pdlPhotoInput" accept="image/*" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue, push, update, get, set }
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDl5t9mr2IA5N-eT-sGll9w7rOk6CmZI44",
+    authDomain: "pdl-visitor-look-up-22c1c.firebaseapp.com",
+    databaseURL: "https://pdl-visitor-look-up-22c1c-default-rtdb.firebaseio.com/",
+    projectId: "pdl-visitor-look-up-22c1c",
+};
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+let allPDLs      = [];
+let allAuditLogs = [];
+let openSections = new Set();
+let currentPhotoPdlId = null;
+let isUserInteracting = false;
+let pendingRender = false;
+
+const soundFiredStart  = new Set();
+const soundFired1Min   = new Set();
+const soundFired10Sec  = new Set();
+
+let buzzerInterval     = null;
+let buzzerExpiredNames = new Set();
+
+const CURRENT_ACTOR = "admin";
+const CURRENT_ROLE  = "Officer";
+
+// ── Audio ────────────────────────────────────────────────────────────────────
+let audioCtx = null;
+function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+}
+function playTones(notes, vol = 0.4) {
+    const ctx = getAudioCtx();
+    const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
+    notes.forEach(({ freq, dur, startAt, type="sine" }) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = type; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime+startAt);
+        gain.gain.linearRampToValueAtTime(1,     ctx.currentTime+startAt+0.01);
+        gain.gain.setValueAtTime(1,              ctx.currentTime+startAt+dur-0.05);
+        gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime+startAt+dur);
+        osc.connect(gain); gain.connect(master);
+        osc.start(ctx.currentTime+startAt); osc.stop(ctx.currentTime+startAt+dur+0.01);
+    });
+}
+function playCheckInChime()    { playTones([{freq:523,dur:.25,startAt:.0},{freq:659,dur:.25,startAt:.15},{freq:784,dur:.35,startAt:.30}],.35); }
+function playOneMinuteWarning(){ playTones([{freq:880,dur:.18,startAt:.00,type:"triangle"},{freq:880,dur:.18,startAt:.28,type:"triangle"}],.45); }
+function playTenSecondAlert()  { playTones([{freq:1200,dur:.12,startAt:.00,type:"square"},{freq:1200,dur:.12,startAt:.18,type:"square"},{freq:1400,dur:.18,startAt:.36,type:"square"}],.40); }
+function playBuzzerPulse()     { playTones([{freq:440,dur:.12,startAt:.00,type:"square"},{freq:440,dur:.12,startAt:.16,type:"square"},{freq:440,dur:.12,startAt:.32,type:"square"}],.55); }
+
+function startBuzzer(name) {
+    buzzerExpiredNames.add(name);
+    document.getElementById("buzzerNames").textContent = [...buzzerExpiredNames].join(", ");
+    document.getElementById("buzzerBanner").style.display = "block";
+    if (!buzzerInterval) { playBuzzerPulse(); buzzerInterval = setInterval(playBuzzerPulse, 1800); }
+}
+window.stopBuzzer = () => {
+    if (buzzerInterval) { clearInterval(buzzerInterval); buzzerInterval = null; }
+    buzzerExpiredNames.clear();
+    document.getElementById("buzzerBanner").style.display = "none";
+};
+
+// ── Date range ───────────────────────────────────────────────────────────────
+function setBdayDateRange() {
+    const inp = document.getElementById("newPdlBday"); if (!inp) return;
+    const today = new Date();
+    inp.setAttribute("max", today.toISOString().split("T")[0]);
+    inp.setAttribute("min", `${today.getFullYear()-100}-01-01`);
+}
+document.getElementById("addPdlModal").addEventListener("show.bs.modal", setBdayDateRange);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const safeText = v => v ?? "";
+async function sha256Hex(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function secsToHMS(s) {
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=s%60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+}
+function parseTimeLimitSec(log) {
+    if (log.timeLimitSec != null) return Number(log.timeLimitSec);
+    return Number(log.timeLimit ?? 0) * 60; // legacy minutes
+}
+async function writeAuditLog({ actionType, pdlId, logId=null, oldValue=null, newValue=null, reason="" }) {
+    const snap = await get(ref(db, "/auditMeta/latestHash"));
+    const prevHash = snap.exists() ? snap.val() : "GENESIS";
+    const timestamp = Date.now();
+    const payload = { actionType, pdlId, logId, actor:CURRENT_ACTOR, actorRole:CURRENT_ROLE,
+                      timestamp, oldValue, newValue, reason, prevHash };
+    const hash = await sha256Hex(JSON.stringify(payload));
+    const aRef = push(ref(db, "/auditLogs"));
+    await set(aRef, { auditId:aRef.key, ...payload, hash });
+    await update(ref(db, "/auditMeta"), { latestHash:hash, latestAuditId:aRef.key, updatedAt:timestamp });
+}
+function formatDateOnly(d) {
+    if (!d) return "N/A"; const dt=new Date(d); return isNaN(dt.getTime())?d:dt.toLocaleDateString();
+}
+function requestRender() {
+    if (isUserInteracting) { pendingRender=true; return; }
+    pendingRender=false; displayRecords();
+}
+document.addEventListener("focusin",  e=>{ if(e.target.matches("select,input,textarea")) isUserInteracting=true; });
+document.addEventListener("focusout", e=>{
+    if(e.target.matches("select,input,textarea")) setTimeout(()=>{
+        const a=document.activeElement;
+        isUserInteracting=!!(a&&a.matches&&a.matches("select,input,textarea"));
+        if(!isUserInteracting&&pendingRender) requestRender();
+    },150);
+});
+
+// ── Timer ────────────────────────────────────────────────────────────────────
+function getTimerInfo(log) {
+    if (log.status!=="in"||!log.timeIn) return {timeStr:"--:--:--",styleClass:""};
+    const limitMs  = parseTimeLimitSec(log)*1000;
+    const timeLeft = (Number(log.timeIn)+limitMs)-Date.now();
+    const lId      = log.logId;
+    if (timeLeft<=0) return {timeStr:"00:00:00",styleClass:"danger-time"};
+    const totalSec = Math.floor(timeLeft/1000);
+    const timeStr  = secsToHMS(totalSec);
+    let styleClass = totalSec<300 ? "warning-time" : "";
+    if      (totalSec<=10 && !soundFired10Sec.has(lId)) { soundFired10Sec.add(lId); playTenSecondAlert(); }
+    else if (totalSec<=60 && totalSec>10 && !soundFired1Min.has(lId)) { soundFired1Min.add(lId); playOneMinuteWarning(); }
+    return {timeStr,styleClass};
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function timeLimitWidget(log) {
+    const total = parseTimeLimitSec(log);
+    const h=Math.floor(total/3600), m=Math.floor((total%3600)/60), s=total%60;
+    return `<div class="time-limit-wrap">
+        <input type="number" class="time-seg-input" value="${h}" min="0" max="23"
+            onchange="window.updateTimeLimitSeg('${log._pdlId}','${log.logId}','h',this.value)">
+        <span class="time-seg-sep">:</span>
+        <input type="number" class="time-seg-input" value="${m}" min="0" max="59"
+            onchange="window.updateTimeLimitSeg('${log._pdlId}','${log.logId}','m',this.value)">
+        <span class="time-seg-sep">:</span>
+        <input type="number" class="time-seg-input" value="${s}" min="0" max="59"
+            onchange="window.updateTimeLimitSeg('${log._pdlId}','${log.logId}','s',this.value)">
+    </div>`;
+}
+
+const displayRecords = () => {
+    const container = document.getElementById("pdlContainer");
+    const dashBody  = document.getElementById("activeDashboardBody");
+    const search    = (document.getElementById("pdlSearch")?.value??"").toLowerCase().trim();
+    let pdlHtml="", dashHtml="";
+
+    allPDLs.filter(p=>(p.name||"").toLowerCase().includes(search)).forEach(pdl=>{
+        let logsHtml="";
+        const isOpen = openSections.has(pdl.id);
+        (pdl.logs||[]).forEach(log=>{
+            log._pdlId = pdl.id;
+            const {timeStr,styleClass} = getTimerInfo(log);
+            if (log.status==="in"&&log.timeIn) {
+                if (timeStr==="00:00:00"&&!log.notified) triggerAlarm(pdl.name,log.name,pdl.id,log.logId);
+                dashHtml+=`<tr>
+                    <td class="fw-bold">${safeText(log.name)||"N/A"}</td>
+                    <td>${safeText(log.rel)||"N/A"}</td>
+                    <td>${safeText(pdl.name)||"N/A"}</td>
+                    <td><span class="badge bg-secondary">${safeText(pdl.dorm)||"N/A"}</span></td>
+                    <td class="dash-timer ${styleClass}">${timeStr}</td>
+                    <td><button class="btn btn-sm btn-danger"
+                        onclick="window.toggleVisitorStatus('${pdl.id}','${log.logId}','in')">Log Out</button></td>
+                </tr>`;
+            }
+            logsHtml+=`<tr>
+                <td>${safeText(log.name)||"N/A"}</td>
+                <td>${safeText(log.rel)||"N/A"}</td>
+                <td>${safeText(log.req)||"N/A"}</td>
+                <td><select class="form-select form-select-sm"
+                    onchange="window.updateVisitorRemark('${pdl.id}','${log.logId}',this.value)">
+                    <option value="Visitation" ${log.remarks==="Visitation"?"selected":""}>Visitation</option>
+                    <option value="Paabot"     ${log.remarks==="Paabot"    ?"selected":""}>Paabot</option>
+                    <option value="Conjugal"   ${log.remarks==="Conjugal"  ?"selected":""}>Conjugal</option>
+                    <option value="Ban"        ${log.remarks==="Ban"       ?"selected":""}>Ban</option>
+                </select></td>
+                <td>${timeLimitWidget(log)}</td>
+                <td class="dash-timer ${styleClass}">${timeStr}</td>
+                <td><div class="d-flex flex-column align-items-center gap-1">
+                    <span class="status-toggle ${log.status||"out"}"
+                        onclick="window.toggleVisitorStatus('${pdl.id}','${log.logId}','${log.status||"out"}')"></span>
+                    <small class="text-uppercase fw-bold">${safeText(log.status)||"out"}</small>
+                </div></td>
+            </tr>`;
+        });
+
+        pdlHtml+=`<div class="pdl-profile-container">
+            <div class="d-flex gap-4 flex-wrap">
+                <img src="${pdl.photo||"https://via.placeholder.com/140"}" class="pdl-photo"
+                    onclick="window.triggerPhotoUpload('${pdl.id}')"
+                    alt="${safeText(pdl.name)||"PDL Photo"}" title="Click to upload photo">
+                <div class="flex-grow-1">
+                    <div class="pdl-name">${safeText(pdl.name)||"N/A"}</div>
+                    <div class="row mt-2 pdl-meta">
+                        <div class="col-md-4"><strong>Dorm:</strong> ${safeText(pdl.dorm)||"N/A"}</div>
+                        <div class="col-md-4"><strong>Birthday:</strong> ${formatDateOnly(pdl.bday)}</div>
+                        <div class="col-md-4"><strong>Case Status:</strong>
+                            <select class="form-select form-select-sm d-inline-block ms-1" style="width:180px"
+                                onchange="window.updateCaseStatus('${pdl.id}',this.value)">
+                                <option value="Serving Sentence" ${pdl.caseStatus==="Serving Sentence"?"selected":""}>Serving Sentence</option>
+                                <option value="Under Trial"      ${pdl.caseStatus==="Under Trial"     ?"selected":""}>Under Trial</option>
+                            </select>
+                        </div>
+                        <div class="col-12"><strong>Address:</strong> ${safeText(pdl.addr)||"N/A"}</div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-outline-primary" onclick="window.toggleLogs('${pdl.id}')">
+                            ${isOpen?"Hide History":"History"}
+                        </button>
+                        <button class="btn btn-sm btn-dark ms-2" onclick="window.openAddVisitor('${pdl.id}')">+ Visitor</button>
+                    </div>
+                </div>
+            </div>
+            <div id="logs-${pdl.id}" class="visitor-section" style="display:${isOpen?"block":"none"}">
+                <div class="table-responsive">
+                    <table class="visitor-table">
+                        <thead><tr>
+                            <th>Visitor</th><th>Relation</th><th>Requirement</th>
+                            <th>Remarks</th><th>Limit (HH:MM:SS)</th><th>Remaining</th><th>Status</th>
+                        </tr></thead>
+                        <tbody>${logsHtml||'<tr><td colspan="7">No logs</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    });
+
+    if (container) container.innerHTML = pdlHtml;
+    if (dashBody)  dashBody.innerHTML  = dashHtml||'<tr><td colspan="6" class="text-center text-muted">No visitors currently inside.</td></tr>';
+};
+
+setInterval(()=>{ if(allPDLs.length&&!isUserInteracting) requestRender(); },1000);
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+window.toggleVisitorStatus = async (pId, lId, cur) => {
+    const next = cur==="in"?"out":"in";
+    const pdl  = allPDLs.find(p=>p.id===pId);
+    const log  = pdl?.logs?.find(l=>l.logId===lId);
+    const data = {status:next};
+    if (next==="in") {
+        data.timeIn=Date.now(); data.notified=false;
+        soundFiredStart.delete(lId); soundFired1Min.delete(lId); soundFired10Sec.delete(lId);
+        soundFiredStart.add(lId); playCheckInChime();
+    }
+    await update(ref(db,`/${pId}/logs/${lId}`),data);
+    await writeAuditLog({ actionType:next==="in"?"VISITOR_CHECK_IN":"VISITOR_CHECK_OUT",
+        pdlId:pId,logId:lId,oldValue:cur,newValue:next,reason:log?.name?`Visitor: ${log.name}`:""});
+};
+
+window.updateTimeLimitSeg = async (pId,lId,seg,val) => {
+    const pdl = allPDLs.find(p=>p.id===pId);
+    const log = pdl?.logs?.find(l=>l.logId===lId);
+    const cur = parseTimeLimitSec(log);
+    const h=Math.floor(cur/3600), m=Math.floor((cur%3600)/60), s=cur%60;
+    const p=parseInt(val)||0;
+    const newSec=(seg==="h"?p:h)*3600+(seg==="m"?p:m)*60+(seg==="s"?p:s);
+    if (newSec===cur) return;
+    await update(ref(db,`/${pId}/logs/${lId}`),{timeLimitSec:newSec,timeLimit:null});
+    await writeAuditLog({actionType:"UPDATE_TIME_LIMIT",pdlId:pId,logId:lId,
+        oldValue:secsToHMS(cur),newValue:secsToHMS(newSec),reason:log?.name?`Visitor: ${log.name}`:""});
+};
+
+window.updateVisitorRemark = async (pId,lId,val) => {
+    const pdl=allPDLs.find(p=>p.id===pId), log=pdl?.logs?.find(l=>l.logId===lId);
+    const old=log?.remarks??null; if(old===val)return;
+    await update(ref(db,`/${pId}/logs/${lId}`),{remarks:val});
+    await writeAuditLog({actionType:"UPDATE_REMARKS",pdlId:pId,logId:lId,oldValue:old,newValue:val,
+        reason:log?.name?`Visitor: ${log.name}`:""});
+};
+
+window.updateCaseStatus = async (pId,val) => {
+    const pdl=allPDLs.find(p=>p.id===pId), old=pdl?.caseStatus??null;
+    if(old===val)return;
+    await update(ref(db,`/${pId}`),{caseStatus:val});
+    await writeAuditLog({actionType:"UPDATE_CASE_STATUS",pdlId:pId,oldValue:old,newValue:val});
+};
+
+window.toggleLogs = (id) => {
+    const el=document.getElementById(`logs-${id}`); if(!el)return;
+    if(el.style.display==="none"){el.style.display="block";openSections.add(id);}
+    else{el.style.display="none";openSections.delete(id);}
+    requestRender();
+};
+window.openAddVisitor    = (id)=>{ document.getElementById("pdlIdForVisitor").value=id; new bootstrap.Modal(document.getElementById("addVisitorModal")).show(); };
+window.triggerPhotoUpload= (id)=>{ currentPhotoPdlId=id; document.getElementById("pdlPhotoInput").click(); };
+
+function triggerAlarm(pdl,vis,pId,lId){
+    document.getElementById("alertVisitorName").innerText=vis||"Visitor";
+    document.getElementById("alertPdlContext").innerText=`Visiting PDL: ${pdl||"N/A"}`;
+    new bootstrap.Modal(document.getElementById("timeUpModal")).show();
+    update(ref(db,`/${pId}/logs/${lId}`),{notified:true});
+    startBuzzer(vis||"Visitor");
+}
+
+document.getElementById("pdlPhotoInput").addEventListener("change",e=>{
+    const file=e.target.files[0]; if(!file||!currentPhotoPdlId)return;
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+        const pdl=allPDLs.find(p=>p.id===currentPhotoPdlId);
+        const old=pdl?.photo?"HAS_PHOTO":"NO_PHOTO";
+        await update(ref(db,`/${currentPhotoPdlId}`),{photo:ev.target.result});
+        await writeAuditLog({actionType:"UPDATE_PHOTO",pdlId:currentPhotoPdlId,oldValue:old,newValue:"HAS_PHOTO"});
+    };
+    reader.readAsDataURL(file); e.target.value="";
+});
+
+// ── Excel export ─────────────────────────────────────────────────────────────
+window.exportAuditToExcel = () => {
+    if(!window.XLSX){alert("XLSX library not ready, please wait a moment.");return;}
+    const XLSX=window.XLSX;
+    const headers=["Timestamp","Activity","Responsible Officer","Visitor","PDL Being Visited","Dorm"];
+    const rows=allAuditLogs.map(log=>{
+        const pdl=allPDLs.find(p=>p.id===log.pdlId);
+        const vm=(log.reason||"").match(/Visitor:\s*(.+)/i);
+        return [
+            new Date(log.timestamp).toLocaleString(),
+            log.actionType||"-",
+            `${log.actor||"admin"} (${log.actorRole||"Officer"})`,
+            vm?vm[1]:(log.reason||"-"),
+            pdl?.name||log.pdlId||"-",
+            pdl?.dorm||"-",
+        ];
+    });
+    const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+    ws["!cols"]=[{wch:22},{wch:24},{wch:26},{wch:24},{wch:24},{wch:12}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Audit Trail");
+    XLSX.writeFile(wb,`LCJ_AuditTrail_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.xlsx`);
+};
+
+// ── PDL + Visitors Excel export ───────────────────────────────────────────────
+window.exportPdlToExcel = () => {
+    if(!window.XLSX){alert("XLSX library not ready, please wait a moment.");return;}
+    if(!allPDLs.length){alert("No PDL records to export.");return;}
+    const XLSX=window.XLSX;
+    const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
+    const wb=XLSX.utils.book_new();
+
+    // ── Sheet 1: PDL Information ─────────────────────────────────────────────
+    const pdlHeaders=["PDL ID","Name","Dorm","Birthday","Address","Case Status","Total Visitors","Active Visitors (In)"];
+    const pdlRows=allPDLs.map(p=>{
+        const total =(p.logs||[]).length;
+        const active=(p.logs||[]).filter(l=>l.status==="in").length;
+        return [
+            p.id,
+            p.name||"-",
+            p.dorm||"-",
+            p.bday ? new Date(p.bday).toLocaleDateString() : "-",
+            p.addr||"-",
+            p.caseStatus||"-",
+            total,
+            active,
+        ];
+    });
+    const wsPdl=XLSX.utils.aoa_to_sheet([pdlHeaders,...pdlRows]);
+    wsPdl["!cols"]=[{wch:22},{wch:26},{wch:12},{wch:14},{wch:30},{wch:18},{wch:16},{wch:18}];
+    // Bold header row styling hint (SheetJS CE supports basic cell styles via s property)
+    XLSX.utils.book_append_sheet(wb,wsPdl,"PDL Records");
+
+    // ── Sheet 2: All Visitor Logs ────────────────────────────────────────────
+    const visHeaders=["PDL Name","Dorm","Visitor Name","Relation","Requirement / ID","Remarks","Time Limit (HH:MM:SS)","Status","Time In"];
+    const visRows=[];
+    allPDLs.forEach(p=>{
+        (p.logs||[]).forEach(log=>{
+            const totalSec = log.timeLimitSec!=null ? Number(log.timeLimitSec) : Number(log.timeLimit||0)*60;
+            const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60;
+            const hms=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+            visRows.push([
+                p.name||"-",
+                p.dorm||"-",
+                log.name||"-",
+                log.rel||"-",
+                log.req||"-",
+                log.remarks||"-",
+                hms,
+                (log.status||"out").toUpperCase(),
+                log.timeIn ? new Date(log.timeIn).toLocaleString() : "-",
+            ]);
+        });
+    });
+    const wsVis=XLSX.utils.aoa_to_sheet([visHeaders,...visRows]);
+    wsVis["!cols"]=[{wch:26},{wch:12},{wch:24},{wch:16},{wch:24},{wch:14},{wch:18},{wch:10},{wch:22}];
+    XLSX.utils.book_append_sheet(wb,wsVis,"Visitor Logs");
+
+    // ── Sheet 3: Per-PDL Summary (one row per PDL with visitor count breakdown) ─
+    const sumHeaders=["PDL Name","Dorm","Case Status","Visitation","Paabot","Conjugal","Ban","Total Visits","Currently Inside"];
+    const sumRows=allPDLs.map(p=>{
+        const logs=p.logs||[];
+        const count=r=>logs.filter(l=>l.remarks===r).length;
+        return [
+            p.name||"-",
+            p.dorm||"-",
+            p.caseStatus||"-",
+            count("Visitation"),
+            count("Paabot"),
+            count("Conjugal"),
+            count("Ban"),
+            logs.length,
+            logs.filter(l=>l.status==="in").length,
+        ];
+    });
+    const wsSum=XLSX.utils.aoa_to_sheet([sumHeaders,...sumRows]);
+    wsSum["!cols"]=[{wch:26},{wch:12},{wch:18},{wch:12},{wch:10},{wch:10},{wch:8},{wch:14},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,wsSum,"Summary");
+
+    XLSX.writeFile(wb,`LCJ_PDLRecords_${dateStr}.xlsx`);
+};
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+onValue(ref(db,"/"),snap=>{
+    const val=snap.val();
+    allPDLs=val?Object.keys(val).filter(k=>k!=="auditLogs"&&k!=="auditMeta")
+        .map(k=>({id:k,...val[k],logs:val[k].logs?Object.keys(val[k].logs).map(lk=>({logId:lk,...val[k].logs[lk]})):[]})):[];
+    requestRender();
+});
+
+onValue(ref(db,"/auditLogs"),snap=>{
+    const body=document.getElementById("auditLogBody"), val=snap.val();
+    if(val){
+        allAuditLogs=Object.values(val).sort((a,b)=>b.timestamp-a.timestamp);
+        const badgeColor={VISITOR_CHECK_IN:"success",VISITOR_CHECK_OUT:"danger",ADD_VISITOR_LOG:"primary",
+            UPDATE_TIME_LIMIT:"warning",UPDATE_REMARKS:"info",UPDATE_CASE_STATUS:"secondary",CREATE_PDL:"dark",UPDATE_PHOTO:"secondary"};
+        body.innerHTML=allAuditLogs.slice(0,20).map(log=>{
+            const pdl=allPDLs.find(p=>p.id===log.pdlId);
+            const vm=(log.reason||"").match(/Visitor:\s*(.+)/i);
+            const visitor=vm?vm[1]:(log.reason||"-");
+            const bc=badgeColor[log.actionType]||"secondary";
+            return `<tr>
+                <td>${new Date(log.timestamp).toLocaleString()}</td>
+                <td><span class="badge bg-${bc}">${log.actionType}</span></td>
+                <td>${log.actor||"admin"} (${log.actorRole||"Officer"})</td>
+                <td>${visitor}</td>
+                <td>${pdl?.name||log.pdlId||"-"}</td>
+                <td><span class="badge bg-secondary">${pdl?.dorm||"-"}</span></td>
+            </tr>`;
+        }).join("");
+    } else {
+        allAuditLogs=[];
+        body.innerHTML='<tr><td colspan="6" class="text-center">No logs found.</td></tr>';
+    }
+});
+
+// ── Save handlers ─────────────────────────────────────────────────────────────
+document.getElementById("saveVisitorBtn").onclick=async()=>{
+    const id=document.getElementById("pdlIdForVisitor").value;
+    const name=document.getElementById("visitorName").value.trim();
+    const rel=document.getElementById("visitorRel").value.trim();
+    const req=document.getElementById("visitorReq").value.trim();
+    const remarks=document.getElementById("visitorRemarks").value;
+    const hh=parseInt(document.getElementById("limitHH").value)||0;
+    const mm=parseInt(document.getElementById("limitMM").value)||0;
+    const ss=parseInt(document.getElementById("limitSS").value)||0;
+    const timeLimitSec=hh*3600+mm*60+ss;
+    if(!name){alert("Visitor name is required.");return;}
+    const data={name,rel,req,remarks,timeLimitSec,timeLimit:null,status:"out",notified:false,timeIn:null};
+    const r=push(ref(db,`/${id}/logs`));
+    await set(r,data);
+    await writeAuditLog({actionType:"ADD_VISITOR_LOG",pdlId:id,logId:r.key,newValue:data});
+    document.getElementById("visitorName").value="";
+    bootstrap.Modal.getInstance(document.getElementById("addVisitorModal")).hide();
+};
+
+document.getElementById("savePdlBtn").onclick=async()=>{
+    const name=document.getElementById("newPdlName").value.trim();
+    const dorm=document.getElementById("newPdlDorm").value.trim();
+    const bday=document.getElementById("newPdlBday").value;
+    const addr=document.getElementById("newPdlAddr").value.trim();
+    const caseStatus=document.getElementById("newPdlCaseStatus").value;
+    if(!name){alert("PDL name is required.");return;}
+    if(bday){
+        const today=new Date(), bd=new Date(bday);
+        if(bd>today){alert("Birthday cannot be a future date.");return;}
+        if(bd.getFullYear()<today.getFullYear()-100){alert("Birthday must be within the last 100 years.");return;}
+    }
+    const data={name,name_lower:name.toLowerCase(),dorm,bday,addr,caseStatus,photo:""};
+    const r=push(ref(db,"/"));
+    await set(r,data);
+    await writeAuditLog({actionType:"CREATE_PDL",pdlId:r.key,newValue:data});
+    document.getElementById("newPdlName").value="";
+    bootstrap.Modal.getInstance(document.getElementById("addPdlModal")).hide();
+};
+
+document.getElementById("pdlSearch").addEventListener("input",displayRecords);
+</script>
+</body>
+</html>
